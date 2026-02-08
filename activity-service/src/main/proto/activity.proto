@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package engine.activity;
+option java_multiple_files = true;
+option java_package = "com.engine.activity.grpc";
+option java_outer_classname = "ActivityProto";
+
+service ActivityService {
+  rpc LogActivity (Activity) returns (ActivityResponse);
+  rpc BulkLogActivities (BulkActivityRequest) returns (BulkActivityResponse);
+}
+
+message Activity {
+  int32 id = 1;
+  string userId = 2;
+  string action = 3;
+  string timestamp = 4;
+}
+
+message ActivityResponse {
+  string status = 1;
+}
+
+message BulkActivityRequest {
+  repeated Activity activities = 1;
+}
+
+message BulkActivityResponse {
+  int32 successCount = 1;
+  int32 failureCount = 2;
+}

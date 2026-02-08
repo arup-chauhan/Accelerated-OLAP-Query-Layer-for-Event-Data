@@ -2,7 +2,7 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: 'unified-engine'
+  - job_name: 'accelerated-olap-query-layer-event-data'
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets:

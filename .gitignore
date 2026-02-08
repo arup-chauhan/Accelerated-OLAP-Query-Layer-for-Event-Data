@@ -51,3 +51,6 @@ Thumbs.db
 
 # Environment / Secrets
 .env
+GAPS_TODO
+GAPS_README.md
+TO_DO.md

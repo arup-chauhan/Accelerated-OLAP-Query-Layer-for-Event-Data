@@ -1,0 +1,10 @@
+{
+  "proto": "../aggregation-service/src/main/proto/aggregation.proto",
+  "call": "aggregation.AggregationService/RunAggregation",
+  "n": 1000,
+  "c": 50,
+  "data": {
+    "startDate": "2025-09-09T00:00:00Z",
+    "endDate": "2025-09-10T00:00:00Z"
+  }
+}

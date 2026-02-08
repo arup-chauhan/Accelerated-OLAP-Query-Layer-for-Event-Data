@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: cache-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: cache-service
+
+grpc:
+  server:
+    port: ${CACHE_GRPC_PORT:9090}

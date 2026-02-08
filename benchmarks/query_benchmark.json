@@ -1,0 +1,11 @@
+{
+  "proto": "../query-service/src/main/proto/query.proto",
+  "call": "query.QueryService/GetAggregatedMetrics",
+  "n": 10000,
+  "c": 500,
+  "data": {
+    "metricName": "total_amount",
+    "startDate": "2025-09-09T00:00:00Z",
+    "endDate": "2025-09-10T00:00:00Z"
+  }
+}

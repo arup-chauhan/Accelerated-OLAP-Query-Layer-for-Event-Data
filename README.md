@@ -80,11 +80,11 @@ Operationally, data-plane services scale independently while stream and storage 
 
 Core services in the platform:
 
-- `ingestion_service`: validates and ingests transaction/activity events, publishes to Kafka
-- `aggregation_service`: manages aggregate computation workflows and persistence integration
-- `query_service`: serves aggregate queries with cache-aside optimization
-- `cache_service`: Redis-backed cache API over gRPC/REST operations
-- `activity_service`: synthetic workload generation for transactions and activities
+- `ingestion-service`: validates and ingests transaction/activity events, publishes to Kafka
+- `aggregation-service`: manages aggregate computation workflows and persistence integration
+- `query-service`: serves aggregate queries with cache-aside optimization
+- `cache-service`: Redis-backed cache API over gRPC/REST operations
+- `activity-service`: synthetic workload generation for transactions and activities
 - `common`: shared DTO/utilities used by multiple services
 
 Infrastructure services:
@@ -160,7 +160,7 @@ sequenceDiagram
 Example:
 
 ```bash
-curl -X POST "http://localhost:8081/api/aggregate/run?inputPath=/hdfs/input&outputPath=/hdfs/output"
+curl -X POST "http://localhost:8081/api/aggregate/run?inputPath=/stream/input&outputPath=/stream/output"
 ```
 
 ### gRPC
@@ -182,11 +182,11 @@ Primary gRPC contracts:
 
 Proto definitions:
 
-- `ingestion_service/src/main/proto/ingestion.proto`
-- `aggregation_service/src/main/proto/aggregation.proto`
-- `query_service/src/main/proto/query.proto`
-- `cache_service/src/main/proto/cache.proto`
-- `activity_service/src/main/proto/activity.proto`
+- `ingestion-service/src/main/proto/ingestion.proto`
+- `aggregation-service/src/main/proto/aggregation.proto`
+- `query-service/src/main/proto/query.proto`
+- `cache-service/src/main/proto/cache.proto`
+- `activity-service/src/main/proto/activity.proto`
 
 ## Storage Layer
 
@@ -232,11 +232,11 @@ Validated benchmark profile:
 
 Benchmark assets:
 
-- `bechmarks/ingestion_bechmark.json`
-- `bechmarks/aggregation_bechmark.json`
-- `bechmarks/query_bechmark.json`
-- `bechmarks/activity_bechmark.json`
-- `bechmarks/bulk_activity_bechmark.json`
+- `benchmarks/ingestion_benchmark.json`
+- `benchmarks/aggregation_benchmark.json`
+- `benchmarks/query_benchmark.json`
+- `benchmarks/activity_benchmark.json`
+- `benchmarks/bulk_activity_benchmark.json`
 
 ## Local Deployment
 
@@ -263,7 +263,7 @@ docker compose down
 
 ## Kubernetes Deployment
 
-Kubernetes manifests are available under `k8/` for:
+Kubernetes manifests are available under `k8s/` for:
 
 - application services
 - stateful data services
@@ -273,7 +273,7 @@ Kubernetes manifests are available under `k8/` for:
 Deploy:
 
 ```bash
-kubectl apply -f k8/
+kubectl apply -f k8s/
 ```
 
 ## Batch and Refresh Workflows
@@ -291,16 +291,16 @@ Design boundary:
 
 ## Repository Layout
 
-- `activity_service/`
-- `aggregation_service/`
-- `bechmarks/`
-- `cache_service/`
+- `activity-service/`
+- `aggregation-service/`
+- `benchmarks/`
+- `cache-service/`
 - `common/`
-- `ingestion_service/`
-- `k8/`
+- `ingestion-service/`
+- `k8s/`
 - `monitoring/`
 - `proto/`
-- `query_service/`
+- `query-service/`
 - `scripts/`
 - `docker-compose.yml`
 - `pom.xml`

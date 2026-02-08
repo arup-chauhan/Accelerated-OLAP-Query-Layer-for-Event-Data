@@ -11,7 +11,7 @@ services:
     environment:
       POSTGRES_DB: unified
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
@@ -27,59 +27,137 @@ services:
     volumes:
       - redis_data:/data
 
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    restart: always
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    ports:
+      - "${KAFKA_PORT}:9092"
+
+  flink-jobmanager:
+    image: flink:1.20-scala_2.12
+    container_name: flink-jobmanager
+    restart: always
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+    ports:
+      - "${FLINK_REST_PORT}:8081"
+
+  flink-taskmanager:
+    image: flink:1.20-scala_2.12
+    container_name: flink-taskmanager
+    restart: always
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    depends_on:
+      - flink-jobmanager
+
   # -------------------
   # Microservices
   # -------------------
   ingestion-service:
-    build: ./ingestion-service
+    build:
+      context: .
+      dockerfile: ingestion-service/Dockerfile
     container_name: ingestion-service
     depends_on:
       - postgres
       - redis
+      - kafka
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ENGINE_KAFKA_ENABLED: "true"
     ports:
       - "${INGESTION_PORT}:8080"
 
   aggregation-service:
-    build: ./aggregation-service
+    build:
+      context: .
+      dockerfile: aggregation-service/Dockerfile
     container_name: aggregation-service
     depends_on:
       - postgres
+      - flink-jobmanager
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      FLINK_JOBMANAGER_HOST: flink-jobmanager
     ports:
       - "${AGGREGATION_PORT}:8081"
 
   query-service:
-    build: ./query-service
+    build:
+      context: .
+      dockerfile: query-service/Dockerfile
     container_name: query-service
     depends_on:
       - postgres
       - redis
+      - cache-service
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      CACHE_GRPC_HOST: cache-service
+      CACHE_GRPC_PORT: 9090
     ports:
       - "${QUERY_PORT}:8082"
 
   cache-service:
-    build: ./cache-service
+    build:
+      context: .
+      dockerfile: cache-service/Dockerfile
     container_name: cache-service
     depends_on:
       - redis
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "${CACHE_PORT}:8083"
 
   activity-service:
-    build: ./activity-service
+    build:
+      context: .
+      dockerfile: activity-service/Dockerfile
     container_name: activity-service
     depends_on:
-      - postgres
-      - redis
+      - ingestion-service
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      INGESTION_HOST: ingestion-service
+      INGESTION_PORT: 9090
     ports:
       - "${ACTIVITY_PORT}:8084"
 
@@ -94,36 +172,16 @@ services:
     ports:
       - "${PROMETHEUS_PORT}:9090"
 
-  loki:
-    image: grafana/loki:2.9.0
-    container_name: loki
-    command: -config.file=/etc/loki/config/config.yml
-    volumes:
-      - ./monitoring/loki-config.yml:/etc/loki/config/config.yml
-    ports:
-      - "${LOKI_PORT}:3100"
-
-  promtail:
-    image: grafana/promtail:2.9.0
-    container_name: promtail
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
       - "${GRAFANA_PORT}:3000"
     volumes:
-      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./monitoring/grafana_datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
       - ./monitoring/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus
-      - loki
 
 volumes:
   postgres_data:

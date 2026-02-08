@@ -5,7 +5,3 @@ datasources:
     type: prometheus
     access: proxy
     url: http://prometheus:${PROMETHEUS_PORT}
-  - name: Loki
-    type: loki
-    access: proxy
-    url: http://loki:${LOKI_PORT}

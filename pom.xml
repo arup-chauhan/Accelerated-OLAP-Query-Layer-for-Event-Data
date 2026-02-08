@@ -4,16 +4,16 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.engine</groupId>
-    <artifactId>unified-engine</artifactId>
+    <artifactId>accelerated-olap-query-layer-event-data</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>aggregation_service</module>
-        <module>ingestion_service</module>
-        <module>query_service</module>
-        <module>cache_service</module>
-        <module>activity_service</module>
+        <module>aggregation-service</module>
+        <module>ingestion-service</module>
+        <module>query-service</module>
+        <module>cache-service</module>
+        <module>activity-service</module>
         <module>common</module>
     </modules>
 

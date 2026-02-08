@@ -1,0 +1,14 @@
+{
+  "proto": "../ingestion-service/src/main/proto/ingestion.proto",
+  "call": "ingestion.IngestionService/IngestTransaction",
+  "n": 10000,
+  "c": 500,
+  "data": {
+    "id": 1,
+    "description": "bench-tx",
+    "amount": 123.45,
+    "currency": "USD",
+    "status": "SUCCESS",
+    "timestamp": "2025-09-09T12:00:00Z"
+  }
+}

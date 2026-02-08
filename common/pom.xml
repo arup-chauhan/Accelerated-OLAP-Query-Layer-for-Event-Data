@@ -5,7 +5,7 @@
 
     <parent>
         <groupId>com.engine</groupId>
-        <artifactId>unified-engine</artifactId>
+        <artifactId>accelerated-olap-query-layer-event-data</artifactId>
         <version>0.0.1-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>

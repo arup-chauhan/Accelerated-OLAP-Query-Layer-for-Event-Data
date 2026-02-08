@@ -1,0 +1,12 @@
+{
+  "proto": "../activity-service/src/main/proto/activity.proto",
+  "call": "engine.activity.ActivityService/LogActivity",
+  "n": 10000,
+  "c": 500,
+  "data": {
+    "id": 1,
+    "userId": "bench-user",
+    "action": "LOGIN",
+    "timestamp": "2025-09-09T12:00:00Z"
+  }
+}
