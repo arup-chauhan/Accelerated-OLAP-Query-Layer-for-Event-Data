@@ -1,322 +1,306 @@
-# **Unified Transaction & Activity Processing Engine**
+# Accelerated OLAP Query Layer for Event Data
 
-A low-latency system that aggregates and analyzes **large-scale transactional and activity data**, breaking down **data silos**
+A production-ready distributed analytics platform that ingests event streams, computes OLAP aggregates, and serves low-latency query responses.
 
----
+## Table of Contents
 
-## **Table of Contents**
+- [Overview](#overview)
+- [What This System Delivers](#what-this-system-delivers)
+- [Architecture](#architecture)
+- [Coordination and Cluster Management](#coordination-and-cluster-management)
+- [Services](#services)
+- [Data and Query Flow](#data-and-query-flow)
+- [APIs](#apis)
+- [Storage Layer](#storage-layer)
+- [Observability and SLOs](#observability-and-slos)
+- [Performance Profile](#performance-profile)
+- [Local Deployment](#local-deployment)
+- [Kubernetes Deployment](#kubernetes-deployment)
+- [Batch and Refresh Workflows](#batch-and-refresh-workflows)
+- [Repository Layout](#repository-layout)
 
-- [Project Overview](#project-overview)
-- [Features](#features)
-- [Real-World Applications](#real-world-applications)
-- [System Architecture](#system-architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Example Output](#example-output)
-- [Test Output](#test-output)
-- [Database](#database)
-- [Docker Deployment](#docker-deployment)
-- [Contributing](#contributing)
+## Overview
 
----
+Accelerated OLAP Query Layer for Event Data is designed for high-throughput event analytics by combining:
 
-## **Project Overview**
+- Event ingestion over gRPC
+- Kafka-based stream decoupling
+- Flink-based streaming aggregation
+- PostgreSQL-backed aggregate serving store
+- Redis-based hot-query acceleration
+- Distributed microservice runtime with Docker and Kubernetes
 
-The **Unified Transaction & Activity Processing Engine** integrates:
+The platform targets low-latency aggregate reads, high ingestion throughput, and stable query behavior under sustained mixed workloads.
 
-- **Hadoop MapReduce** for large-scale batch data processing.  
-- **gRPC API** for low-latency access to aggregated insights.  
-- **Dockerized services** for reproducibility and deployment across environments.  
+## What This System Delivers
 
-It allows enterprises to unify **transactional** and **user activity logs** into a single queryable system.
+- Unified processing for transaction and activity event streams
+- Streaming OLAP aggregation pipeline (Kafka + Flink)
+- Cache-accelerated query serving (Redis cache-aside)
+- gRPC-first service interfaces for low-overhead internal communication
+- REST utility endpoints for operational controls and health checks
+- Containerized local and Kubernetes deployment models
+- Prometheus metrics and Grafana dashboards for runtime observability
 
----
+## Architecture
 
-## **Features**
+```mermaid
+flowchart TD
+    A[Event Producers] --> B[Ingestion Service]
+    B --> C[Kafka Topics]
+    C --> D[Flink Streaming Jobs]
+    D --> E[(PostgreSQL Aggregates)]
+    E --> F[Query Service]
+    F <--> G[(Redis Cache)]
+    F --> H[Client Queries]
 
-- Aggregate **transactional and activity data** at scale.  
-- Fault-tolerant and horizontally scalable MapReduce jobs.  
-- **gRPC endpoints** for fast and reliable data queries.  
-- Containerized deployment using **Docker**.  
-- Designed to **eliminate data silos** by integrating multiple input sources.  
-
----
-
-## **Real-World Applications**
-
-This engine drives **data unification and analytics** across multiple industries. Key use cases include:
-
-### **1. FinTech & Banking**  
-- Analyze **transactions and user activity logs** for fraud detection.  
-- Provide **real-time insights** for compliance and auditing.  
-
-### **2. E-Commerce Platforms**  
-- Combine **order transactions with user behavior** for trend analysis.  
-- Generate **personalized product recommendations**.  
-
-### **3. Media & Content Platforms**  
-- Aggregate **content engagement logs** and subscription transactions.  
-- Enable **low-latency dashboards** for editorial and ad insights.  
-
-### **4. Enterprise Data Lakes**  
-- Unify logs from **multiple departments** into one analytics engine.  
-- Break down **organizational data silos** for better decision-making.  
-
----
-## **System Architecture**
-
-```plaintext
-[ Transaction Logs ]      [ Activity Logs ]
-        |                         |
-        v                         v
-    [ Hadoop MapReduce Processing Layer ]
-                  |
-                  v
-            [ Aggregated Data ]
-                  |
-                  v
-           [ gRPC API Service ]
-                  |
-                  v
-            [ Client Queries ]
-````
----
-## **Installation**
-
-### **Prerequisites**
-
-* Java 11+
-* Hadoop (local or cluster setup)
-* Docker
-
-### **Clone the Repository**
-
-```bash
-git clone https://github.com/Arup-Chauhan/Unified-Activity-Processing.git
-cd Unified-Activity-Processing
+    I[Prometheus] --> B
+    I --> D
+    I --> F
+    J[Grafana] --> I
 ```
 
----
+Runtime layering:
 
-### **Build the Project**
+- Processing layer: ingestion, event bus, streaming aggregation
+- Serving layer: aggregate storage, query API, cache acceleration
+- Platform layer: orchestration, metrics collection, dashboarding
+
+## Coordination and Cluster Management
+
+Coordination responsibilities in this architecture:
+
+- `Kafka` manages ordered durable stream partitions and producer/consumer coordination.
+- `Flink` coordinates distributed stream execution through JobManager/TaskManager roles.
+- `Kubernetes` orchestrates service deployments, probes, scaling behavior, and service networking.
+
+Operationally, data-plane services scale independently while stream and storage dependencies are coordinated through cluster primitives.
+
+## Services
+
+Core services in the platform:
+
+- `ingestion_service`: validates and ingests transaction/activity events, publishes to Kafka
+- `aggregation_service`: manages aggregate computation workflows and persistence integration
+- `query_service`: serves aggregate queries with cache-aside optimization
+- `cache_service`: Redis-backed cache API over gRPC/REST operations
+- `activity_service`: synthetic workload generation for transactions and activities
+- `common`: shared DTO/utilities used by multiple services
+
+Infrastructure services:
+
+- `postgres`
+- `redis`
+- `kafka`
+- `flink-jobmanager`
+- `flink-taskmanager`
+- `prometheus`
+- `grafana`
+
+## Data and Query Flow
+
+Ingestion and aggregation flow:
+
+1. Producer sends transaction/activity events to ingestion APIs.
+2. Ingestion service validates and persists raw records.
+3. Ingestion service publishes normalized events to Kafka topics.
+4. Flink jobs consume topics and compute time-windowed aggregates.
+5. Aggregates are persisted into PostgreSQL serving tables.
+
+Query flow:
+
+1. Client sends aggregate query request.
+2. Query service checks Redis cache.
+3. On cache miss, query service reads PostgreSQL aggregate tables.
+4. Query service writes fresh response to Redis with TTL.
+5. Query service returns response stream to client.
+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant I as Ingestion Service
+    participant K as Kafka
+    participant F as Flink
+    participant DB as PostgreSQL
+    participant Q as Query Service
+    participant R as Redis
+    participant C as Client
+
+    P->>I: Ingest event
+    I->>DB: Persist raw event
+    I->>K: Publish event
+    K->>F: Stream consumption
+    F->>DB: Upsert aggregates
+
+    C->>Q: GetAggregatedMetrics
+    Q->>R: Cache lookup
+    alt Cache hit
+        R-->>Q: Cached result
+    else Cache miss
+        Q->>DB: Query aggregates
+        DB-->>Q: Result set
+        Q->>R: Cache write (TTL)
+    end
+    Q-->>C: Query response
+```
+
+## APIs
+
+### REST
+
+- `POST /api/ingest/event` - event ingestion endpoint
+- `POST /api/aggregate/run` - aggregation execution trigger
+- `GET /api/aggregate/status` - aggregation workflow status
+- `GET /api/query/transactions/{userId}` - transaction-oriented query endpoint
+- `GET /api/query/activities/{userId}` - activity-oriented query endpoint
+- `GET /api/cache/get/{key}` - cache lookup
+- `POST /api/cache/set/{key}` - cache write
+- `DELETE /cache/invalidate/{key}` - cache invalidation
+
+Example:
 
 ```bash
+curl -X POST "http://localhost:8081/api/aggregate/run?inputPath=/hdfs/input&outputPath=/hdfs/output"
+```
+
+### gRPC
+
+Primary gRPC contracts:
+
+- `ingestion.IngestionService`
+  - `IngestTransaction`
+  - `IngestActivity`
+- `aggregation.AggregationService`
+  - `RunAggregation`
+  - `GetAggregatedMetrics`
+- `query.QueryService`
+  - `GetAggregatedMetrics`
+- `cache.CacheService`
+  - `Get`
+  - `Set`
+  - `Invalidate`
+
+Proto definitions:
+
+- `ingestion_service/src/main/proto/ingestion.proto`
+- `aggregation_service/src/main/proto/aggregation.proto`
+- `query_service/src/main/proto/query.proto`
+- `cache_service/src/main/proto/cache.proto`
+- `activity_service/src/main/proto/activity.proto`
+
+## Storage Layer
+
+- PostgreSQL: raw event records and aggregate metric tables
+- Redis: low-latency query cache for repeated aggregate requests
+- Kafka: durable event log for streaming compute pipeline
+
+Representative entities:
+
+- `transaction`
+- `activity_log`
+- `aggregated_metrics`
+
+## Observability and SLOs
+
+Observability assets:
+
+- Prometheus scrape config: `monitoring/prometheus.yml`
+- Grafana datasource config: `monitoring/grafana_datasource.yml`
+
+Key runtime metrics:
+
+- ingest request volume/rate
+- stream processing lag and throughput
+- aggregate query latency (p50/p95/p99)
+- cache hit/miss ratio
+- service error rates
+
+Primary service objectives:
+
+- Low-latency aggregate query path
+- Stable error rate under sustained load
+- Predictable end-to-end freshness from ingest to query visibility
+
+## Performance Profile
+
+Validated benchmark profile:
+
+- Concurrent event ingestion workload
+- Cached vs uncached query latency characterization
+- Aggregate freshness lag measurement
+- Sustained mixed read/write load profile
+
+Benchmark assets:
+
+- `bechmarks/ingestion_bechmark.json`
+- `bechmarks/aggregation_bechmark.json`
+- `bechmarks/query_bechmark.json`
+- `bechmarks/activity_bechmark.json`
+- `bechmarks/bulk_activity_bechmark.json`
+
+## Local Deployment
+
+Prerequisites:
+
+- Java 17+
+- Maven 3.9+
+- Docker + Docker Compose
+
+Build and run:
+
+```bash
+git clone https://github.com/Arup-Chauhan/Unified-Transaction-Activity-Processing-Engine.git
+cd Unified-Transaction-Activity-Processing-Engine
 mvn clean package
+docker compose --env-file .env up --build -d
 ```
 
----
-
-### **Run in Docker**
+Stop local stack:
 
 ```bash
-docker build -t unified-activity-processing .
-docker run -p 50051:50051 unified-activity-processing
+docker compose down
 ```
 
----
+## Kubernetes Deployment
 
-## **Usage**
+Kubernetes manifests are available under `k8/` for:
 
-### **Submit Data to HDFS**
+- application services
+- stateful data services
+- stream-processing runtime
+- monitoring components
+
+Deploy:
 
 ```bash
-hdfs dfs -put /local/data/transactions.txt /input/transactions
-hdfs dfs -put /local/data/activity.txt /input/activity
+kubectl apply -f k8/
 ```
 
-### **Trigger MapReduce Job**
+## Batch and Refresh Workflows
 
-```bash
-hadoop jar target/unified-processing.jar com.project.Main /input /output
-```
+Batch and refresh workflows are used for:
 
-### **Query via gRPC**
+- aggregate backfill and recomputation
+- cache refresh and invalidation cycles
+- quality/reconciliation passes on derived metrics
 
-Use a gRPC client (Postman/gRPC UI or generated stubs) to call:
+Design boundary:
 
-* `GetTransactionSummary`
-* `GetActivityTrends`
-* `GetAnomalyReport`
+- Streaming path handles near-real-time compute.
+- Batch workflows handle replay, correction, and large-window recomputation.
 
----
+## Repository Layout
 
-## **API Endpoints**
-
-* **GetTransactionSummary** → Returns aggregated transaction insights.
-* **GetActivityTrends** → Provides activity metrics and trends.
-* **GetAnomalyReport** → Detects outliers in logs.
-
-(See `proto/` folder for detailed service definitions.)
-
-### **Sample gRPC Proto Definition**
-
-```proto
-syntax = "proto3";
-
-package unified;
-
-service UnifiedProcessingService {
-  rpc GetTransactionSummary (TransactionRequest) returns (TransactionSummary);
-  rpc GetActivityTrends (ActivityRequest) returns (ActivityTrends);
-  rpc GetAnomalyReport (AnomalyRequest) returns (AnomalyReport);
-}
-
-message TransactionRequest {
-  string user_id = 1;
-  string date_range = 2;
-}
-
-message TransactionSummary {
-  int64 total_transactions = 1;
-  double total_amount = 2;
-}
-
-message ActivityRequest {
-  string user_id = 1;
-  string date_range = 2;
-}
-
-message ActivityTrends {
-  repeated string top_actions = 1;
-  map<string, int32> action_counts = 2;
-}
-
-message AnomalyRequest {
-  string source = 1;
-}
-
-message AnomalyReport {
-  repeated string anomalies = 1;
-}
-```
-
----
-
-### **Sample Java Client Usage**
-
-```java
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import unified.UnifiedProcessingServiceGrpc;
-import unified.Unified.TransactionRequest;
-import unified.Unified.TransactionSummary;
-
-public class ClientExample {
-    public static void main(String[] args) {
-        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 50051)
-                .usePlaintext()
-                .build();
-
-        UnifiedProcessingServiceGrpc.UnifiedProcessingServiceBlockingStub stub =
-                UnifiedProcessingServiceGrpc.newBlockingStub(channel);
-
-        TransactionRequest request = TransactionRequest.newBuilder()
-                .setUserId("user123")
-                .setDateRange("2023-01-01_to_2023-01-31")
-                .build();
-
-        TransactionSummary response = stub.getTransactionSummary(request);
-
-        System.out.println("Total Transactions: " + response.getTotalTransactions());
-        System.out.println("Total Amount: " + response.getTotalAmount());
-
-        channel.shutdown();
-    }
-}
-```
-
----
-
-## **Example Output**
-
-**Transaction Summary (Java Client):**
-
-```plaintext
-Total Transactions: 1543
-Total Amount: 98234.75
-```
-
-**Activity Trends (Java Client):**
-
-```plaintext
-Top Actions: ["click", "purchase", "view"]
-Action Counts: {click=1203, purchase=243, view=3109}
-```
-
-**Anomaly Report (Java Client):**
-
-```plaintext
-Anomalies: ["suspicious_login", "payment_failure"]
-```
-
----
-## **Database**
-
-- **Raw Data**: Stored in **HDFS** for distributed processing with Hadoop MapReduce.  
-- **Aggregated Results**: Persisted into **PostgreSQL** for structured queries, analytics, and integration with BI/reporting tools.  
-
-This setup ensures the system leverages Hadoop’s scalability while still enabling **SQL-based insights** and easy downstream consumption.
-
-### **Sample PostgreSQL Schema**
-
-```sql
--- Table for storing raw/processed transactions
-CREATE TABLE transactions (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(100) NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    transaction_time TIMESTAMP NOT NULL
-);
-
--- Table for storing user activity logs
-CREATE TABLE activity_logs (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(100) NOT NULL,
-    action VARCHAR(255) NOT NULL,
-    activity_time TIMESTAMP NOT NULL
-);
-
--- Table for storing aggregated metrics
-CREATE TABLE aggregated_metrics (
-    id SERIAL PRIMARY KEY,
-    metric_type VARCHAR(100) NOT NULL,  -- e.g. 'daily_summary', 'trend'
-    metric_key VARCHAR(255) NOT NULL,   -- e.g. 'user123:2023-01-01'
-    metric_value JSONB NOT NULL,        -- flexible storage for counts, sums, anomalies
-    created_at TIMESTAMP DEFAULT NOW()
-);
-````
-
-The **`aggregated_metrics`** table uses `JSONB` to flexibly store complex outputs (counts, anomaly lists, trend vectors) without changing schema every time.
-
----
-
-## **Docker Deployment**
-
-### **Docker Deployment Instructions**
-
-1. **Build and Start Docker Container**:
-
-   ```bash
-   docker-compose up --build
-   ```
-
-2. **Verify Services**:
-
-   ```bash
-   docker ps
-   ```
-
-3. **Access gRPC Service**:
-
-   ```
-   localhost:50051
-   ```
-
----
-
-## **Contributing**
-
-Big on Contributions! Fork the repository and submit a pull request.
-
----
+- `activity_service/`
+- `aggregation_service/`
+- `bechmarks/`
+- `cache_service/`
+- `common/`
+- `ingestion_service/`
+- `k8/`
+- `monitoring/`
+- `proto/`
+- `query_service/`
+- `scripts/`
+- `docker-compose.yml`
+- `pom.xml`
