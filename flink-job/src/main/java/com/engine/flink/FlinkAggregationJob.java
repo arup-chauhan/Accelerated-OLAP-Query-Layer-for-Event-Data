@@ -14,12 +14,14 @@ import org.apache.flink.connector.jdbc.JdbcSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -29,6 +31,8 @@ import java.util.Locale;
 public class FlinkAggregationJob {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final OutputTag<MetricDelta> LATE_EVENTS_TAG = new OutputTag<>("late-events") {
+    };
 
     public static void main(String[] args) throws Exception {
         ParameterTool params = ParameterTool.fromArgs(args);
@@ -59,22 +63,21 @@ public class FlinkAggregationJob {
                 .<MetricDelta>forBoundedOutOfOrderness(Duration.ofSeconds(allowedLatenessSeconds))
                 .withTimestampAssigner((SerializableTimestampAssigner<MetricDelta>) (event, recordTimestamp) -> event.eventTimeMs);
 
-        DataStream<AggregatedMetric> aggregated = txDeltas
+        SingleOutputStreamOperator<AggregatedMetric> aggregated = txDeltas
                 .union(activityDeltas)
                 .assignTimestampsAndWatermarks(watermark)
                 .keyBy(v -> v.metricName)
                 .window(TumblingEventTimeWindows.of(Time.minutes(1)))
                 .allowedLateness(Time.seconds(allowedLatenessSeconds))
+                .sideOutputLateData(LATE_EVENTS_TAG)
                 .aggregate(new SumMetricAggregate(), new WindowedMetricProjector());
 
         aggregated.addSink(
                 JdbcSink.sink(
-                        """
-                        INSERT INTO aggregated_metrics (metric_name, metric_value, window_start, window_end)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT (metric_name, window_start, window_end)
-                        DO UPDATE SET metric_value = EXCLUDED.metric_value
-                        """,
+                        "INSERT INTO aggregated_metrics (metric_name, metric_value, window_start, window_end) " +
+                                "VALUES (?, ?, ?, ?) " +
+                                "ON CONFLICT (metric_name, window_start, window_end) " +
+                                "DO UPDATE SET metric_value = EXCLUDED.metric_value",
                         (statement, metric) -> {
                             statement.setString(1, metric.metricName);
                             statement.setDouble(2, metric.metricValue);
@@ -94,6 +97,31 @@ public class FlinkAggregationJob {
                                 .build()
                 )
         ).name("postgres-aggregated-metrics-sink");
+
+        DataStream<MetricDelta> lateEvents = aggregated.getSideOutput(LATE_EVENTS_TAG);
+        lateEvents.addSink(
+                JdbcSink.sink(
+                        "INSERT INTO late_events (metric_name, delta_value, event_time, ingested_at) " +
+                                "VALUES (?, ?, ?, ?)",
+                        (statement, late) -> {
+                            statement.setString(1, late.metricName);
+                            statement.setDouble(2, late.delta);
+                            statement.setTimestamp(3, Timestamp.from(Instant.ofEpochMilli(late.eventTimeMs)));
+                            statement.setTimestamp(4, Timestamp.from(Instant.now()));
+                        },
+                        JdbcExecutionOptions.builder()
+                                .withBatchSize(200)
+                                .withBatchIntervalMs(1000)
+                                .withMaxRetries(3)
+                                .build(),
+                        new JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
+                                .withUrl(jdbcUrl)
+                                .withDriverName("org.postgresql.Driver")
+                                .withUsername(jdbcUser)
+                                .withPassword(jdbcPassword)
+                                .build()
+                )
+        ).name("postgres-late-events-sink");
 
         env.execute("flink-aggregation-job");
     }
