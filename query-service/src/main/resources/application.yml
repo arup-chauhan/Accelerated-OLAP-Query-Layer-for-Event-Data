@@ -19,6 +19,9 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    redis:
+      enabled: false
   metrics:
     tags:
       application: query-service
@@ -27,3 +30,7 @@ cache:
   grpc:
     host: ${CACHE_GRPC_HOST:localhost}
     port: ${CACHE_GRPC_PORT:9090}
+
+engine:
+  query:
+    validate-aggregate-schema: ${ENGINE_QUERY_VALIDATE_AGGREGATE_SCHEMA:true}
